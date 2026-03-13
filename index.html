@@ -438,6 +438,11 @@
     return true;
   }
 
+  // Text that existed before current recording session started
+  let textBeforeRecording = '';
+  // Finalized transcript accumulated during this session
+  let sessionFinal = '';
+
   function createRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const rec = new SpeechRecognition();
@@ -445,22 +450,20 @@
     rec.continuous = true;
     rec.interimResults = true;
 
-    let finalTranscript = '';
-
     rec.onresult = (event) => {
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          finalTranscript += transcript + ' ';
+          sessionFinal += transcript + ' ';
         } else {
           interim += transcript;
         }
       }
-      // Append to existing text
-      const existingText = textArea.value.replace(/\s*🔴.*$/, '');
-      const cursorText = interim ? ' 🔴 ' + interim : '';
-      textArea.value = (existingText ? existingText + ' ' : '') + finalTranscript.trim() + cursorText;
+      // Build display: text before recording + finalized new text + interim preview
+      const base = textBeforeRecording ? textBeforeRecording.trimEnd() + ' ' : '';
+      const interimDisplay = interim ? '🔴 ' + interim : '';
+      textArea.value = (base + sessionFinal.trim() + (interimDisplay ? ' ' + interimDisplay : '')).trim();
       textArea.scrollTop = textArea.scrollHeight;
       btnSave.disabled = textArea.value.trim() === '';
     };
@@ -475,10 +478,10 @@
 
     rec.onend = () => {
       // Clean up interim indicator
-      textArea.value = textArea.value.replace(/\s*🔴.*$/, '');
+      textArea.value = textArea.value.replace(/\s*🔴.*$/, '').trim();
 
       if (currentMode === 'toggle' && toggleRecording) {
-        // Restart for continuous toggle recording
+        // Restart for continuous toggle recording — keep accumulating
         try { rec.start(); } catch(e) {}
       } else {
         stopAllRecording();
@@ -496,6 +499,8 @@
     }
 
     currentMode = mode;
+    textBeforeRecording = textArea.value.replace(/\s*🔴.*$/, '').trim();
+    sessionFinal = '';
     const rec = createRecognition();
 
     try {
