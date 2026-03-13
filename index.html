@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0e0e12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sanelu">
+<title>Sanelu</title>
+<script>
+// Generate PNG icon via canvas and register PWA manifest
+(function() {
+  function createIcon(size) {
+    const c = document.createElement('canvas');
+    c.width = size; c.height = size;
+    const ctx = c.getContext('2d');
+    const s = size / 192;
+
+    // Background rounded rect
+    ctx.fillStyle = '#0e0e12';
+    ctx.beginPath();
+    ctx.roundRect(0, 0, size, size, 40 * s);
+    ctx.fill();
+
+    // Microphone body
+    ctx.fillStyle = '#ff6b4a';
+    ctx.beginPath();
+    ctx.roundRect(82 * s, 40 * s, 28 * s, 50 * s, 14 * s);
+    ctx.fill();
+
+    // Microphone arc
+    ctx.strokeStyle = '#ff6b4a';
+    ctx.lineWidth = 6 * s;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(96 * s, 80 * s, 36 * s, Math.PI, 0);
+    ctx.stroke();
+
+    // Stem
+    ctx.beginPath();
+    ctx.moveTo(96 * s, 116 * s);
+    ctx.lineTo(96 * s, 140 * s);
+    ctx.stroke();
+
+    // Base
+    ctx.beginPath();
+    ctx.moveTo(78 * s, 140 * s);
+    ctx.lineTo(114 * s, 140 * s);
+    ctx.stroke();
+
+    // Red recording dot
+    ctx.fillStyle = '#ff3b30';
+    ctx.beginPath();
+    ctx.arc(140 * s, 52 * s, 12 * s, 0, Math.PI * 2);
+    ctx.fill();
+
+    return c.toDataURL('image/png');
+  }
+
+  const icon192 = createIcon(192);
+  const icon512 = createIcon(512);
+
+  // Apple touch icon
+  const appleLink = document.createElement('link');
+  appleLink.rel = 'apple-touch-icon';
+  appleLink.href = icon192;
+  document.head.appendChild(appleLink);
+
+  // Favicon
+  const favicon = document.createElement('link');
+  favicon.rel = 'icon';
+  favicon.type = 'image/png';
+  favicon.href = icon192;
+  document.head.appendChild(favicon);
+
+  // Web App Manifest
+  const manifest = {
+    name: "Sanelu",
+    short_name: "Sanelu",
+    description: "Puheentunnistus & Google Docs -tallennus",
+    start_url: location.href.split('?')[0],
+    display: "standalone",
+    background_color: "#0e0e12",
+    theme_color: "#0e0e12",
+    icons: [
+      { src: icon192, sizes: "192x192", type: "image/png", purpose: "any maskable" },
+      { src: icon512, sizes: "512x512", type: "image/png", purpose: "any maskable" }
+    ]
+  };
+  const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+  const manifestLink = document.createElement('link');
+  manifestLink.rel = 'manifest';
+  manifestLink.href = URL.createObjectURL(blob);
+  document.head.appendChild(manifestLink);
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e12;
+    --surface: #1a1a22;
+    --surface-hover: #22222e;
+    --border: #2a2a38;
+    --text: #e8e8f0;
+    --text-dim: #8888a0;
+    --accent: #ff6b4a;
+    --accent-glow: rgba(255, 107, 74, 0.25);
+    --accent2: #4ae0ff;
+    --accent2-glow: rgba(74, 224, 255, 0.2);
+    --success: #4aff8b;
+    --success-glow: rgba(74, 255, 139, 0.2);
+    --radius: 12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 640px;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+
+  .header h1 {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.6rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+
+  .header p {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    font-weight: 300;
+  }
+
+  .textarea-wrap {
+    position: relative;
+    margin-bottom: 20px;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 200px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1rem;
+    line-height: 1.7;
+    padding: 20px;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+
+  textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+
+  textarea::placeholder {
+    color: var(--text-dim);
+    font-style: italic;
+    font-weight: 300;
+  }
+
+  .controls {
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 24px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .btn:hover {
+    background: var(--surface-hover);
+    border-color: #3a3a4a;
+    transform: translateY(-1px);
+  }
+
+  .btn:active {
+    transform: translateY(0);
+  }
+
+  .btn svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+
+  .btn-hold {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .btn-hold.recording {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 0 20px var(--accent-glow), 0 0 60px var(--accent-glow);
+    animation: pulse-hold 1s ease-in-out infinite;
+  }
+
+  .btn-toggle {
+    border-color: var(--accent2);
+    color: var(--accent2);
+  }
+
+  .btn-toggle.recording {
+    background: var(--accent2);
+    color: #0e0e12;
+    box-shadow: 0 0 20px var(--accent2-glow), 0 0 60px var(--accent2-glow);
+    animation: pulse-toggle 1s ease-in-out infinite;
+  }
+
+  .btn-save {
+    border-color: var(--success);
+    color: var(--success);
+    flex-basis: 100%;
+    justify-content: center;
+  }
+
+  .btn-save:hover {
+    background: var(--success);
+    color: #0e0e12;
+    box-shadow: 0 0 16px var(--success-glow);
+  }
+
+  .btn-save:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn-save:disabled:hover {
+    background: var(--surface);
+    color: var(--success);
+    box-shadow: none;
+  }
+
+  @keyframes pulse-hold {
+    0%, 100% { box-shadow: 0 0 20px var(--accent-glow); }
+    50% { box-shadow: 0 0 30px var(--accent-glow), 0 0 80px var(--accent-glow); }
+  }
+
+  @keyframes pulse-toggle {
+    0%, 100% { box-shadow: 0 0 20px var(--accent2-glow); }
+    50% { box-shadow: 0 0 30px var(--accent2-glow), 0 0 80px var(--accent2-glow); }
+  }
+
+  .status {
+    text-align: center;
+    margin-bottom: 30px;
+    min-height: 24px;
+  }
+
+  .status-msg {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    padding: 6px 16px;
+    border-radius: 20px;
+    display: inline-block;
+  }
+
+  .status-msg.info {
+    color: var(--text-dim);
+    background: rgba(136, 136, 160, 0.1);
+  }
+
+  .status-msg.recording-status {
+    color: var(--accent);
+    background: rgba(255, 107, 74, 0.1);
+  }
+
+  .status-msg.success {
+    color: var(--success);
+    background: rgba(74, 255, 139, 0.1);
+  }
+
+  .status-msg.error {
+    color: #ff6b6b;
+    background: rgba(255, 107, 107, 0.1);
+  }
+
+  .lang-select {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    justify-content: center;
+  }
+
+  .lang-btn {
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text-dim);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .lang-btn.active {
+    border-color: var(--accent2);
+    color: var(--accent2);
+    background: rgba(74, 224, 255, 0.08);
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="header">
+    <h1>⏺ Sanelu</h1>
+    <p>Puheentunnistus &amp; Google Docs -tallennus</p>
+  </div>
+
+  <div class="lang-select">
+    <button class="lang-btn active" data-lang="fi-FI">Suomi</button>
+    <button class="lang-btn" data-lang="en-US">English</button>
+    <button class="lang-btn" data-lang="sv-SE">Svenska</button>
+  </div>
+
+  <div class="textarea-wrap">
+    <textarea id="textArea" placeholder="Saneltu teksti ilmestyy tähän..."></textarea>
+  </div>
+
+  <div class="controls">
+    <button class="btn btn-hold" id="btnHold">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+      Pidä pohjassa
+    </button>
+
+    <button class="btn btn-toggle" id="btnToggle">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <circle cx="12" cy="12" r="4" fill="currentColor"/>
+      </svg>
+      Klikkaa aloita / lopeta
+    </button>
+
+    <button class="btn btn-save" id="btnSave" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+        <polyline points="17 21 17 13 7 13 7 21"/>
+        <polyline points="7 3 7 8 15 8"/>
+      </svg>
+      Tallenna Google Docsiin
+    </button>
+  </div>
+
+  <div class="status" id="statusArea"></div>
+</div>
+
+<script>
+  const textArea = document.getElementById('textArea');
+  const btnHold = document.getElementById('btnHold');
+  const btnToggle = document.getElementById('btnToggle');
+  const btnSave = document.getElementById('btnSave');
+  const statusArea = document.getElementById('statusArea');
+
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzC4fC1DpLfbG6_Rt-Cayxox8bZxQhUPNzBW1yLxZ7f9oo0udIiCwaDrQkE4fZCVrEj/exec';
+
+  let recognition = null;
+  let currentMode = null; // 'hold' or 'toggle'
+  let toggleRecording = false;
+  let selectedLang = 'fi-FI';
+
+  // Language selection
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedLang = btn.dataset.lang;
+    });
+  });
+
+  // Enable save button when text exists
+  textArea.addEventListener('input', () => {
+    btnSave.disabled = textArea.value.trim() === '';
+  });
+
+  function showStatus(msg, type = 'info') {
+    statusArea.innerHTML = `<span class="status-msg ${type}">${msg}</span>`;
+  }
+
+  function clearStatus() {
+    statusArea.innerHTML = '';
+  }
+
+  function checkSpeechSupport() {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      showStatus('Selaimesi ei tue puheentunnistusta. Käytä Chromea.', 'error');
+      return false;
+    }
+    return true;
+  }
+
+  function createRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const rec = new SpeechRecognition();
+    rec.lang = selectedLang;
+    rec.continuous = true;
+    rec.interimResults = true;
+
+    let finalTranscript = '';
+
+    rec.onresult = (event) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + ' ';
+        } else {
+          interim += transcript;
+        }
+      }
+      // Append to existing text
+      const existingText = textArea.value.replace(/\s*🔴.*$/, '');
+      const cursorText = interim ? ' 🔴 ' + interim : '';
+      textArea.value = (existingText ? existingText + ' ' : '') + finalTranscript.trim() + cursorText;
+      textArea.scrollTop = textArea.scrollHeight;
+      btnSave.disabled = textArea.value.trim() === '';
+    };
+
+    rec.onerror = (event) => {
+      console.error('Speech error:', event.error);
+      if (event.error !== 'aborted') {
+        showStatus('Virhe: ' + event.error, 'error');
+      }
+      stopAllRecording();
+    };
+
+    rec.onend = () => {
+      // Clean up interim indicator
+      textArea.value = textArea.value.replace(/\s*🔴.*$/, '');
+
+      if (currentMode === 'toggle' && toggleRecording) {
+        // Restart for continuous toggle recording
+        try { rec.start(); } catch(e) {}
+      } else {
+        stopAllRecording();
+      }
+    };
+
+    recognition = rec;
+    return rec;
+  }
+
+  function startRecording(mode) {
+    if (!checkSpeechSupport()) return;
+    if (recognition) {
+      try { recognition.abort(); } catch(e) {}
+    }
+
+    currentMode = mode;
+    const rec = createRecognition();
+
+    try {
+      rec.start();
+      if (mode === 'hold') {
+        btnHold.classList.add('recording');
+        showStatus('● Nauhoitetaan – pidä nappi pohjassa', 'recording-status');
+      } else {
+        toggleRecording = true;
+        btnToggle.classList.add('recording');
+        showStatus('● Nauhoitetaan – klikkaa uudelleen lopettaaksesi', 'recording-status');
+      }
+    } catch(e) {
+      showStatus('Nauhoituksen aloitus epäonnistui', 'error');
+    }
+  }
+
+  function stopAllRecording() {
+    if (recognition) {
+      try { recognition.abort(); } catch(e) {}
+      recognition = null;
+    }
+    currentMode = null;
+    toggleRecording = false;
+    btnHold.classList.remove('recording');
+    btnToggle.classList.remove('recording');
+    textArea.value = textArea.value.replace(/\s*🔴.*$/, '');
+    clearStatus();
+  }
+
+  // HOLD button: mousedown/touchstart → start, mouseup/touchend → stop
+  btnHold.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    startRecording('hold');
+  });
+  btnHold.addEventListener('mouseup', () => stopAllRecording());
+  btnHold.addEventListener('mouseleave', () => {
+    if (currentMode === 'hold') stopAllRecording();
+  });
+  btnHold.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    startRecording('hold');
+  });
+  btnHold.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    stopAllRecording();
+  });
+
+  // TOGGLE button: click to start/stop
+  btnToggle.addEventListener('click', () => {
+    if (currentMode === 'toggle' && toggleRecording) {
+      toggleRecording = false;
+      stopAllRecording();
+    } else {
+      if (currentMode === 'hold') stopAllRecording();
+      startRecording('toggle');
+    }
+  });
+
+  // SAVE button
+  btnSave.addEventListener('click', async () => {
+    const text = textArea.value.trim();
+    if (!text) return;
+
+    const now = new Date();
+    const timestamp = now.toLocaleDateString('fi-FI') + ' ' +
+      now.toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' });
+
+    btnSave.disabled = true;
+    showStatus('Tallennetaan...', 'info');
+
+    try {
+      const response = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, timestamp })
+      });
+
+      showStatus('✓ Tallennettu Google Docsiin – ' + timestamp, 'success');
+      textArea.value = '';
+      btnSave.disabled = true;
+
+      setTimeout(clearStatus, 4000);
+    } catch (err) {
+      showStatus('Tallennusvirhe: ' + err.message, 'error');
+      btnSave.disabled = false;
+    }
+  });
+</script>
+
+</body>
+</html>
