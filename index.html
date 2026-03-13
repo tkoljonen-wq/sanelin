@@ -407,6 +407,14 @@
   let currentMode = null; // 'hold' or 'toggle'
   let toggleRecording = false;
   let selectedLang = 'fi-FI';
+  let restartTimer = null;
+
+  // Text that existed before current recording session started
+  let textBeforeRecording = '';
+  // Finalized transcript accumulated during this session
+  let sessionFinal = '';
+  // Used to suppress duplicate final chunks
+  let lastAcceptedFinal = '';
 
   // Language selection
   document.querySelectorAll('.lang-btn').forEach(btn => {
@@ -438,10 +446,12 @@
     return true;
   }
 
-  // Text that existed before current recording session started
-  let textBeforeRecording = '';
-  // Finalized transcript accumulated during this session
-  let sessionFinal = '';
+  function normalizeTranscript(text) {
+    return text
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
 
   function createRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -452,59 +462,99 @@
 
     rec.onresult = (event) => {
       let interim = '';
+      let newFinals = [];
+
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
+        const transcript = event.results[i][0].transcript.trim();
+
         if (event.results[i].isFinal) {
-          sessionFinal += transcript + ' ';
+          const normalized = normalizeTranscript(transcript);
+
+          // Estä peräkkäinen saman final-pätkän toisto
+          if (normalized && normalized !== lastAcceptedFinal) {
+            newFinals.push(transcript);
+            lastAcceptedFinal = normalized;
+          }
         } else {
-          interim += transcript;
+          interim += transcript + ' ';
         }
       }
-      // Build display: text before recording + finalized new text + interim preview
-      const base = textBeforeRecording ? textBeforeRecording.trimEnd() + ' ' : '';
-      const interimDisplay = interim ? '🔴 ' + interim : '';
-      textArea.value = (base + sessionFinal.trim() + (interimDisplay ? ' ' + interimDisplay : '')).trim();
+
+      if (newFinals.length) {
+        sessionFinal = (sessionFinal + ' ' + newFinals.join(' ')).trim();
+      }
+
+      const parts = [];
+      if (textBeforeRecording) parts.push(textBeforeRecording);
+      if (sessionFinal) parts.push(sessionFinal);
+
+      const cleanInterim = interim.trim();
+      if (cleanInterim) {
+        parts.push('🔴 ' + cleanInterim);
+      }
+
+      textArea.value = parts.join(' ').trim();
       textArea.scrollTop = textArea.scrollHeight;
       btnSave.disabled = textArea.value.trim() === '';
     };
 
     rec.onerror = (event) => {
       console.error('Speech error:', event.error);
+
       if (event.error !== 'aborted') {
         showStatus('Virhe: ' + event.error, 'error');
       }
-      stopAllRecording();
+
+      stopAllRecording(false);
     };
 
     rec.onend = () => {
-      // Clean up interim indicator
+      // Poista interim-merkintä
       textArea.value = textArea.value.replace(/\s*🔴.*$/, '').trim();
+      btnSave.disabled = textArea.value.trim() === '';
 
+      // Toggle-tilassa käynnistetään uusi tunnistusolio pienellä viiveellä
       if (currentMode === 'toggle' && toggleRecording) {
-        // Restart for continuous toggle recording — keep accumulating
-        try { rec.start(); } catch(e) {}
+        clearTimeout(restartTimer);
+        restartTimer = setTimeout(() => {
+          if (currentMode === 'toggle' && toggleRecording) {
+            recognition = createRecognition();
+            try {
+              recognition.start();
+            } catch (e) {
+              showStatus('Nauhoituksen jatkaminen epäonnistui', 'error');
+              stopAllRecording(false);
+            }
+          }
+        }, 250);
       } else {
-        stopAllRecording();
+        stopAllRecording(false);
       }
     };
 
-    recognition = rec;
     return rec;
   }
 
   function startRecording(mode) {
     if (!checkSpeechSupport()) return;
+
+    clearTimeout(restartTimer);
+
     if (recognition) {
-      try { recognition.abort(); } catch(e) {}
+      try { recognition.abort(); } catch (e) {}
+      recognition = null;
     }
 
     currentMode = mode;
     textBeforeRecording = textArea.value.replace(/\s*🔴.*$/, '').trim();
     sessionFinal = '';
-    const rec = createRecognition();
+    lastAcceptedFinal = '';
+
+    recognition = createRecognition();
 
     try {
-      rec.start();
+      recognition.start();
+
       if (mode === 'hold') {
         btnHold.classList.add('recording');
         showStatus('● Nauhoitetaan – pidä nappi pohjassa', 'recording-status');
@@ -513,21 +563,29 @@
         btnToggle.classList.add('recording');
         showStatus('● Nauhoitetaan – klikkaa uudelleen lopettaaksesi', 'recording-status');
       }
-    } catch(e) {
+    } catch (e) {
       showStatus('Nauhoituksen aloitus epäonnistui', 'error');
     }
   }
 
-  function stopAllRecording() {
+  function stopAllRecording(abortRecognition = true) {
+    clearTimeout(restartTimer);
+
     if (recognition) {
-      try { recognition.abort(); } catch(e) {}
+      try {
+        if (abortRecognition) {
+          recognition.abort();
+        }
+      } catch (e) {}
       recognition = null;
     }
+
     currentMode = null;
     toggleRecording = false;
     btnHold.classList.remove('recording');
     btnToggle.classList.remove('recording');
-    textArea.value = textArea.value.replace(/\s*🔴.*$/, '');
+    textArea.value = textArea.value.replace(/\s*🔴.*$/, '').trim();
+    btnSave.disabled = textArea.value.trim() === '';
     clearStatus();
   }
 
@@ -536,18 +594,22 @@
     e.preventDefault();
     startRecording('hold');
   });
+
   btnHold.addEventListener('mouseup', () => stopAllRecording());
+
   btnHold.addEventListener('mouseleave', () => {
     if (currentMode === 'hold') stopAllRecording();
   });
+
   btnHold.addEventListener('touchstart', (e) => {
     e.preventDefault();
     startRecording('hold');
-  });
+  }, { passive: false });
+
   btnHold.addEventListener('touchend', (e) => {
     e.preventDefault();
     stopAllRecording();
-  });
+  }, { passive: false });
 
   // TOGGLE button: click to start/stop
   btnToggle.addEventListener('click', () => {
@@ -573,7 +635,7 @@
     showStatus('Tallennetaan...', 'info');
 
     try {
-      const response = await fetch(SCRIPT_URL, {
+      await fetch(SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
