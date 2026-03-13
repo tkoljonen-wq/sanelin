@@ -434,6 +434,7 @@
   let restartTimer = null;
   let manualStop = false;
   let isStarting = false;
+  let holdPressed = false;
 
   let baseText = '';
   let utteranceFinal = '';
@@ -557,6 +558,19 @@
       stopRecognitionOnly();
       commitUtterance();
 
+      if (currentMode === 'hold' && holdPressed && !manualStop) {
+        baseText = cleanPreviewText(textArea.value);
+        resetUtteranceState();
+
+        clearTimeout(restartTimer);
+        restartTimer = setTimeout(() => {
+          if (currentMode === 'hold' && holdPressed) {
+            startRecognitionCycle();
+          }
+        }, 80);
+        return;
+      }
+
       if (currentMode === 'toggle' && toggleRecording && !manualStop) {
         baseText = cleanPreviewText(textArea.value);
         resetUtteranceState();
@@ -605,10 +619,12 @@
     resetUtteranceState();
 
     if (mode === 'hold') {
+      holdPressed = true;
       btnHold.classList.add('recording');
       btnToggle.classList.remove('recording');
       showStatus('● Nauhoitetaan – pidä nappi pohjassa', 'recording-status');
     } else {
+      holdPressed = false;
       toggleRecording = true;
       btnToggle.classList.add('recording');
       btnHold.classList.remove('recording');
@@ -632,6 +648,7 @@
     clearTimeout(restartTimer);
     currentMode = null;
     toggleRecording = false;
+    holdPressed = false;
     manualStop = false;
     isStarting = false;
     btnHold.classList.remove('recording');
@@ -644,6 +661,8 @@
 
   function stopAllRecording() {
     manualStop = true;
+    holdPressed = false;
+    toggleRecording = false;
     clearTimeout(restartTimer);
     stopRecognitionOnly();
   }
@@ -651,25 +670,35 @@
   btnHold.addEventListener('mousedown', (e) => {
     e.preventDefault();
     if (currentMode) return;
+    holdPressed = true;
     startRecording('hold');
   });
 
   btnHold.addEventListener('mouseup', () => {
+    holdPressed = false;
     if (currentMode === 'hold') stopAllRecording();
   });
 
   btnHold.addEventListener('mouseleave', () => {
+    holdPressed = false;
     if (currentMode === 'hold') stopAllRecording();
   });
 
   btnHold.addEventListener('touchstart', (e) => {
     e.preventDefault();
     if (currentMode) return;
+    holdPressed = true;
     startRecording('hold');
   }, { passive: false });
 
   btnHold.addEventListener('touchend', (e) => {
     e.preventDefault();
+    holdPressed = false;
+    if (currentMode === 'hold') stopAllRecording();
+  }, { passive: false });
+
+  btnHold.addEventListener('touchcancel', () => {
+    holdPressed = false;
     if (currentMode === 'hold') stopAllRecording();
   }, { passive: false });
 
