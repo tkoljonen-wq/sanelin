@@ -8,28 +8,26 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Sanelu">
 <title>Sanelu</title>
+
 <script>
-// Generate PNG icon via canvas and register PWA manifest
 (function() {
   function createIcon(size) {
     const c = document.createElement('canvas');
-    c.width = size; c.height = size;
+    c.width = size;
+    c.height = size;
     const ctx = c.getContext('2d');
     const s = size / 192;
 
-    // Background rounded rect
     ctx.fillStyle = '#0e0e12';
     ctx.beginPath();
     ctx.roundRect(0, 0, size, size, 40 * s);
     ctx.fill();
 
-    // Microphone body
     ctx.fillStyle = '#ff6b4a';
     ctx.beginPath();
     ctx.roundRect(82 * s, 40 * s, 28 * s, 50 * s, 14 * s);
     ctx.fill();
 
-    // Microphone arc
     ctx.strokeStyle = '#ff6b4a';
     ctx.lineWidth = 6 * s;
     ctx.lineCap = 'round';
@@ -37,19 +35,16 @@
     ctx.arc(96 * s, 80 * s, 36 * s, Math.PI, 0);
     ctx.stroke();
 
-    // Stem
     ctx.beginPath();
     ctx.moveTo(96 * s, 116 * s);
     ctx.lineTo(96 * s, 140 * s);
     ctx.stroke();
 
-    // Base
     ctx.beginPath();
     ctx.moveTo(78 * s, 140 * s);
     ctx.lineTo(114 * s, 140 * s);
     ctx.stroke();
 
-    // Red recording dot
     ctx.fillStyle = '#ff3b30';
     ctx.beginPath();
     ctx.arc(140 * s, 52 * s, 12 * s, 0, Math.PI * 2);
@@ -61,20 +56,17 @@
   const icon192 = createIcon(192);
   const icon512 = createIcon(512);
 
-  // Apple touch icon
   const appleLink = document.createElement('link');
   appleLink.rel = 'apple-touch-icon';
   appleLink.href = icon192;
   document.head.appendChild(appleLink);
 
-  // Favicon
   const favicon = document.createElement('link');
   favicon.rel = 'icon';
   favicon.type = 'image/png';
   favicon.href = icon192;
   document.head.appendChild(favicon);
 
-  // Web App Manifest
   const manifest = {
     name: "Sanelu",
     short_name: "Sanelu",
@@ -88,6 +80,7 @@
       { src: icon512, sizes: "512x512", type: "image/png", purpose: "any maskable" }
     ]
   };
+
   const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
   const manifestLink = document.createElement('link');
   manifestLink.rel = 'manifest';
@@ -95,7 +88,9 @@
   document.head.appendChild(manifestLink);
 })();
 </script>
+
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
 <style>
   :root {
     --bg: #0e0e12;
@@ -157,7 +152,7 @@
 
   textarea {
     width: 100%;
-    min-height: 200px;
+    min-height: 220px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -404,19 +399,17 @@
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzC4fC1DpLfbG6_Rt-Cayxox8bZxQhUPNzBW1yLxZ7f9oo0udIiCwaDrQkE4fZCVrEj/exec';
 
   let recognition = null;
-  let currentMode = null; // 'hold' or 'toggle'
+  let currentMode = null;     // 'hold' | 'toggle' | null
   let toggleRecording = false;
   let selectedLang = 'fi-FI';
   let restartTimer = null;
+  let manualStop = false;
+  let isStarting = false;
 
-  // Text that existed before current recording session started
-  let textBeforeRecording = '';
-  // Finalized transcript accumulated during this session
-  let sessionFinal = '';
-  // Used to suppress duplicate final chunks
-  let lastAcceptedFinal = '';
+  let baseText = '';
+  let utteranceFinal = '';
+  let utteranceInterim = '';
 
-  // Language selection
   document.querySelectorAll('.lang-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
@@ -425,7 +418,6 @@
     });
   });
 
-  // Enable save button when text exists
   textArea.addEventListener('input', () => {
     btnSave.disabled = textArea.value.trim() === '';
   });
@@ -446,56 +438,67 @@
     return true;
   }
 
-  function normalizeTranscript(text) {
-    return text
-      .replace(/\s+/g, ' ')
-      .trim()
-      .toLowerCase();
+  function cleanPreviewText(text) {
+    return text.replace(/\s*🔴.*$/, '').trim();
+  }
+
+  function joinTexts(a, b) {
+    const left = (a || '').trim();
+    const right = (b || '').trim();
+    if (!left) return right;
+    if (!right) return left;
+    return left + ' ' + right;
+  }
+
+  function updateTextareaPreview() {
+    const preview = utteranceInterim ? ' 🔴 ' + utteranceInterim : '';
+    const value = (baseText + (utteranceFinal ? ' ' + utteranceFinal : '') + preview).trim();
+    textArea.value = value;
+    textArea.scrollTop = textArea.scrollHeight;
+    btnSave.disabled = cleanPreviewText(textArea.value) === '';
+  }
+
+  function commitUtterance() {
+    const finalText = utteranceFinal.trim();
+    textArea.value = joinTexts(baseText, finalText);
+    textArea.scrollTop = textArea.scrollHeight;
+    btnSave.disabled = textArea.value.trim() === '';
+  }
+
+  function resetUtteranceState() {
+    utteranceFinal = '';
+    utteranceInterim = '';
   }
 
   function createRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const rec = new SpeechRecognition();
     rec.lang = selectedLang;
-    rec.continuous = true;
     rec.interimResults = true;
+    rec.continuous = false;
+
+    rec.onstart = () => {
+      isStarting = false;
+    };
 
     rec.onresult = (event) => {
-      let interim = '';
-      let newFinals = [];
+      let finalText = '';
+      let interimText = '';
 
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript.trim();
+      for (let i = 0; i < event.results.length; i++) {
+        const part = event.results[i][0].transcript.trim();
+        if (!part) continue;
 
         if (event.results[i].isFinal) {
-          const normalized = normalizeTranscript(transcript);
-
-          // Estä peräkkäinen saman final-pätkän toisto
-          if (normalized && normalized !== lastAcceptedFinal) {
-            newFinals.push(transcript);
-            lastAcceptedFinal = normalized;
-          }
+          finalText += (finalText ? ' ' : '') + part;
         } else {
-          interim += transcript + ' ';
+          interimText += (interimText ? ' ' : '') + part;
         }
       }
 
-      if (newFinals.length) {
-        sessionFinal = (sessionFinal + ' ' + newFinals.join(' ')).trim();
-      }
-
-      const parts = [];
-      if (textBeforeRecording) parts.push(textBeforeRecording);
-      if (sessionFinal) parts.push(sessionFinal);
-
-      const cleanInterim = interim.trim();
-      if (cleanInterim) {
-        parts.push('🔴 ' + cleanInterim);
-      }
-
-      textArea.value = parts.join(' ').trim();
-      textArea.scrollTop = textArea.scrollHeight;
-      btnSave.disabled = textArea.value.trim() === '';
+      utteranceFinal = finalText.trim();
+      utteranceInterim = interimText.trim();
+      updateTextareaPreview();
     };
 
     rec.onerror = (event) => {
@@ -505,97 +508,115 @@
         showStatus('Virhe: ' + event.error, 'error');
       }
 
-      stopAllRecording(false);
+      manualStop = true;
+      stopRecognitionOnly();
+      finishRecordingUI();
     };
 
     rec.onend = () => {
-      // Poista interim-merkintä
-      textArea.value = textArea.value.replace(/\s*🔴.*$/, '').trim();
-      btnSave.disabled = textArea.value.trim() === '';
+      stopRecognitionOnly();
+      commitUtterance();
 
-      // Toggle-tilassa käynnistetään uusi tunnistusolio pienellä viiveellä
-      if (currentMode === 'toggle' && toggleRecording) {
+      if (currentMode === 'toggle' && toggleRecording && !manualStop) {
+        baseText = cleanPreviewText(textArea.value);
+        resetUtteranceState();
+
         clearTimeout(restartTimer);
         restartTimer = setTimeout(() => {
           if (currentMode === 'toggle' && toggleRecording) {
-            recognition = createRecognition();
-            try {
-              recognition.start();
-            } catch (e) {
-              showStatus('Nauhoituksen jatkaminen epäonnistui', 'error');
-              stopAllRecording(false);
-            }
+            startRecognitionCycle();
           }
-        }, 250);
+        }, 150);
       } else {
-        stopAllRecording(false);
+        finishRecordingUI();
       }
     };
 
     return rec;
   }
 
+  function startRecognitionCycle() {
+    if (!checkSpeechSupport()) return;
+    if (isStarting) return;
+
+    clearTimeout(restartTimer);
+    stopRecognitionOnly();
+
+    recognition = createRecognition();
+    isStarting = true;
+    manualStop = false;
+
+    try {
+      recognition.start();
+    } catch (e) {
+      isStarting = false;
+      showStatus('Nauhoituksen aloitus epäonnistui', 'error');
+      finishRecordingUI();
+    }
+  }
+
   function startRecording(mode) {
     if (!checkSpeechSupport()) return;
 
     clearTimeout(restartTimer);
-
-    if (recognition) {
-      try { recognition.abort(); } catch (e) {}
-      recognition = null;
-    }
-
+    manualStop = false;
     currentMode = mode;
-    textBeforeRecording = textArea.value.replace(/\s*🔴.*$/, '').trim();
-    sessionFinal = '';
-    lastAcceptedFinal = '';
+    baseText = cleanPreviewText(textArea.value);
+    resetUtteranceState();
 
-    recognition = createRecognition();
-
-    try {
-      recognition.start();
-
-      if (mode === 'hold') {
-        btnHold.classList.add('recording');
-        showStatus('● Nauhoitetaan – pidä nappi pohjassa', 'recording-status');
-      } else {
-        toggleRecording = true;
-        btnToggle.classList.add('recording');
-        showStatus('● Nauhoitetaan – klikkaa uudelleen lopettaaksesi', 'recording-status');
-      }
-    } catch (e) {
-      showStatus('Nauhoituksen aloitus epäonnistui', 'error');
+    if (mode === 'hold') {
+      btnHold.classList.add('recording');
+      btnToggle.classList.remove('recording');
+      showStatus('● Nauhoitetaan – pidä nappi pohjassa', 'recording-status');
+    } else {
+      toggleRecording = true;
+      btnToggle.classList.add('recording');
+      btnHold.classList.remove('recording');
+      showStatus('● Nauhoitetaan – klikkaa uudelleen lopettaaksesi', 'recording-status');
     }
+
+    startRecognitionCycle();
   }
 
-  function stopAllRecording(abortRecognition = true) {
-    clearTimeout(restartTimer);
-
+  function stopRecognitionOnly() {
     if (recognition) {
-      try {
-        if (abortRecognition) {
-          recognition.abort();
-        }
-      } catch (e) {}
+      const rec = recognition;
       recognition = null;
+      try { rec.stop(); } catch (e) {}
+      try { rec.abort(); } catch (e) {}
     }
+    isStarting = false;
+  }
 
+  function finishRecordingUI() {
+    clearTimeout(restartTimer);
     currentMode = null;
     toggleRecording = false;
+    manualStop = false;
+    isStarting = false;
     btnHold.classList.remove('recording');
     btnToggle.classList.remove('recording');
-    textArea.value = textArea.value.replace(/\s*🔴.*$/, '').trim();
+    textArea.value = cleanPreviewText(textArea.value);
     btnSave.disabled = textArea.value.trim() === '';
     clearStatus();
+    resetUtteranceState();
   }
 
-  // HOLD button: mousedown/touchstart → start, mouseup/touchend → stop
+  function stopAllRecording() {
+    manualStop = true;
+    clearTimeout(restartTimer);
+    stopRecognitionOnly();
+  }
+
   btnHold.addEventListener('mousedown', (e) => {
     e.preventDefault();
+    if (currentMode) return;
     startRecording('hold');
   });
 
-  btnHold.addEventListener('mouseup', () => stopAllRecording());
+  btnHold.addEventListener('mouseup', () => {
+    if (currentMode === 'hold') stopAllRecording();
+  });
 
   btnHold.addEventListener('mouseleave', () => {
     if (currentMode === 'hold') stopAllRecording();
@@ -603,18 +624,17 @@
 
   btnHold.addEventListener('touchstart', (e) => {
     e.preventDefault();
+    if (currentMode) return;
     startRecording('hold');
   }, { passive: false });
 
   btnHold.addEventListener('touchend', (e) => {
     e.preventDefault();
-    stopAllRecording();
+    if (currentMode === 'hold') stopAllRecording();
   }, { passive: false });
 
-  // TOGGLE button: click to start/stop
   btnToggle.addEventListener('click', () => {
     if (currentMode === 'toggle' && toggleRecording) {
-      toggleRecording = false;
       stopAllRecording();
     } else {
       if (currentMode === 'hold') stopAllRecording();
@@ -622,9 +642,8 @@
     }
   });
 
-  // SAVE button
   btnSave.addEventListener('click', async () => {
-    const text = textArea.value.trim();
+    const text = cleanPreviewText(textArea.value);
     if (!text) return;
 
     const now = new Date();
@@ -645,7 +664,6 @@
       showStatus('✓ Tallennettu Google Docsiin – ' + timestamp, 'success');
       textArea.value = '';
       btnSave.disabled = true;
-
       setTimeout(clearStatus, 4000);
     } catch (err) {
       showStatus('Tallennusvirhe: ' + err.message, 'error');
