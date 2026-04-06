@@ -9,85 +9,9 @@
 <meta name="apple-mobile-web-app-title" content="Sanelu">
 <title>Sanelu</title>
 
-<script>
-(function() {
-  function createIcon(size) {
-    const c = document.createElement('canvas');
-    c.width = size;
-    c.height = size;
-    const ctx = c.getContext('2d');
-    const s = size / 192;
-
-    ctx.fillStyle = '#0e0e12';
-    ctx.beginPath();
-    ctx.roundRect(0, 0, size, size, 40 * s);
-    ctx.fill();
-
-    ctx.fillStyle = '#ff6b4a';
-    ctx.beginPath();
-    ctx.roundRect(82 * s, 40 * s, 28 * s, 50 * s, 14 * s);
-    ctx.fill();
-
-    ctx.strokeStyle = '#ff6b4a';
-    ctx.lineWidth = 6 * s;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.arc(96 * s, 80 * s, 36 * s, Math.PI, 0);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(96 * s, 116 * s);
-    ctx.lineTo(96 * s, 140 * s);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(78 * s, 140 * s);
-    ctx.lineTo(114 * s, 140 * s);
-    ctx.stroke();
-
-    ctx.fillStyle = '#ff3b30';
-    ctx.beginPath();
-    ctx.arc(140 * s, 52 * s, 12 * s, 0, Math.PI * 2);
-    ctx.fill();
-
-    return c.toDataURL('image/png');
-  }
-
-  const icon192 = createIcon(192);
-  const icon512 = createIcon(512);
-
-  const appleLink = document.createElement('link');
-  appleLink.rel = 'apple-touch-icon';
-  appleLink.href = icon192;
-  document.head.appendChild(appleLink);
-
-  const favicon = document.createElement('link');
-  favicon.rel = 'icon';
-  favicon.type = 'image/png';
-  favicon.href = icon192;
-  document.head.appendChild(favicon);
-
-  const manifest = {
-    name: "Sanelu",
-    short_name: "Sanelu",
-    description: "Puheentunnistus & Google Docs -tallennus",
-    start_url: location.href.split('?')[0],
-    display: "standalone",
-    background_color: "#0e0e12",
-    theme_color: "#0e0e12",
-    icons: [
-      { src: icon192, sizes: "192x192", type: "image/png", purpose: "any maskable" },
-      { src: icon512, sizes: "512x512", type: "image/png", purpose: "any maskable" }
-    ]
-  };
-
-  const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-  const manifestLink = document.createElement('link');
-  manifestLink.rel = 'manifest';
-  manifestLink.href = URL.createObjectURL(blob);
-  document.head.appendChild(manifestLink);
-})();
-</script>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.svg">
+<link rel="icon" type="image/svg+xml" href="icons/icon-192.svg">
 
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 
@@ -751,6 +675,10 @@
   });
 
   updateButtons();
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+  }
 </script>
 
 </body>
