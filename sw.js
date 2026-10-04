@@ -1,4 +1,7 @@
-const CACHE_NAME = 'sanelu-v1';
+// Origin tkoljonen-wq.github.io on jaettu muiden sovellusten kanssa:
+// poistetaan vain tämän sovelluksen omat vanhat välimuistit
+const CACHE_PREFIX = 'sanelu-';
+const CACHE_NAME = CACHE_PREFIX + 'v2';
 const ASSETS = [
   './index.html',
   './manifest.json',
@@ -17,7 +20,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys => Promise.all(
-      keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+      keys.filter(k => k.startsWith(CACHE_PREFIX) && k !== CACHE_NAME).map(k => caches.delete(k))
     ))
   );
   self.clients.claim();
